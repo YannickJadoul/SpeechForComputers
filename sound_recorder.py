@@ -12,6 +12,7 @@ class SoundRecorder:
 		return (None, pyaudio.paContinue)
 
 	def __init__(self, *, sampling_frequency=16000, block_size=200):
+		self._blocks_count = 0
 		self._queue = queue.Queue()
 		self._sampling_frequency = sampling_frequency
 
@@ -28,6 +29,10 @@ class SoundRecorder:
 		if clear:
 			self.clear()
 
+	@property
+	def active(self):
+		return self.stream.is_active()
+
 	def clear(self):
 		self._sound = None
 
@@ -39,6 +44,7 @@ class SoundRecorder:
 		recorded = []
 		while not self._queue.empty():
 			recorded.append(self._queue.get())
+			self._blocks_count += 1
 
 		if recorded:
 			recorded_sound = parselmouth.Sound(np.hstack(recorded), sampling_frequency=self._sampling_frequency)
@@ -50,3 +56,7 @@ class SoundRecorder:
 				self._sound = parselmouth.Sound.concatenate([self._sound, recorded_sound])
 
 		return self._sound
+
+	@property
+	def blocks_recorded(self):
+		return self._blocks_count
