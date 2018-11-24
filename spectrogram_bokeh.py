@@ -1,3 +1,4 @@
+import sound_player
 import sound_recorder
 import ui
 
@@ -20,9 +21,10 @@ BLOCK_SIZE = 100
 
 RECODING_SLICE = 0.25
 RECORDED_SLICE = 10
-SPECTROGRAM_WINDOW_LENGTH = 0.02 # Turn into slider widget?
+SPECTROGRAM_WINDOW_LENGTH = {'start': 0.005, 'end': 0.05, 'value': 0.02, 'step': 0.005}
 
 
+player = sound_player.SoundPlayer(block_size=BLOCK_SIZE)
 recorder = sound_recorder.SoundRecorder(sampling_frequency=SAMPLING_FREQUENCY, block_size=BLOCK_SIZE)
 recorder.start()
 
@@ -35,9 +37,13 @@ sound_selection = ui.SoundSelectionButtons(extra_sounds.keys())
 wave_plot = ui.WavePlot()
 spectrum_plot = ui.SpectrumPlot()
 spectrogram_plot = ui.SpectrogramPlot()
+play_indicator = ui.PlayIndicator([wave_plot.fig, spectrogram_plot.fig])
 ui.link_ranges(wave_plot.fig.x_range, spectrogram_plot.fig.x_range)
 
-widgets = bokeh.layouts.widgetbox(*sound_selection.buttons, width=400, sizing_mode='fixed')
+window_length_slider = bokeh.models.widgets.Slider(**SPECTROGRAM_WINDOW_LENGTH, format="0.000", title="Spectrogram window")
+play_button = bokeh.models.widgets.Button(label="\u25b6 Play")
+
+widgets = bokeh.layouts.widgetbox(*sound_selection.buttons, ui.hr(), window_length_slider, ui.hr(), play_button, width=400, sizing_mode='fixed')
 layout = bokeh.layouts.row(widgets, bokeh.layouts.column(wave_plot.fig, spectrum_plot.fig, spectrogram_plot.fig, sizing_mode='scale_height'), sizing_mode='scale_height')
 
 
@@ -101,7 +107,7 @@ def update_spectrogram(sound_slice):
 		spectrogram_plot.source.data = {'values': [], 'x': [], 'y': [], 'w': [], 'h': []}
 	else:
 		try:
-			spectrogram = sound_slice.to_spectrogram(window_length=SPECTROGRAM_WINDOW_LENGTH)
+			spectrogram = sound_slice.to_spectrogram(window_length=window_length_slider.value)
 
 			spectrogram_values = 10 * np.log10(spectrogram.values)
 			spectrogram_values = np.maximum(spectrogram_values, np.max(spectrogram_values) - 70)
@@ -110,6 +116,10 @@ def update_spectrogram(sound_slice):
 			spectrogram_plot.source.data = {'values': [spectrogram_values], 'x': [spectrogram.x1 - spectrogram.dx / 2], 'y': [spectrogram.y1 - spectrogram.dy / 2], 'w': [spectrogram.nx * spectrogram.dx], 'h': [spectrogram.ny * spectrogram.dy]}
 		except:
 			spectrogram_plot.source.data = {'values': [], 'x': [], 'y': [], 'w': [], 'h': []}
+
+
+def update_play_indicator():
+	play_indicator.x = player.t
 
 
 previous_blocks_recorded = 0
@@ -124,19 +134,19 @@ def print_samples(sound_slice):
 
 
 def update(manual=False):
-	if not manual and not sound_selection.is_recording:
-		return
-
 	t = time.time()
 
-	sound = get_sound()
-	highlighted_sound = get_highlighted_sound(sound)
+	update_play_indicator()
 
-	update_wave(sound)
-	update_spectrum(highlighted_sound)
-	update_spectrogram(None if sound_selection.is_recording else sound)
+	if manual or sound_selection.is_recording:
+		sound = get_sound()
+		highlighted_sound = get_highlighted_sound(sound)
 
-	#print_samples(sound)
+		update_wave(sound)
+		update_spectrum(highlighted_sound)
+		update_spectrogram(None if sound_selection.is_recording else highlighted_sound)
+
+	print_samples(sound)
 
 	#print(time.time() - t)
 
@@ -144,6 +154,20 @@ def update_spectrum_of_wave_selection(attr, old, new):
 	sound = get_sound()
 	highlighted_sound = get_highlighted_sound(sound)
 	update_spectrum(highlighted_sound)
+	update_spectrogram(None if sound_selection.is_recording else highlighted_sound)
+
+
+def update_spectrogram_window_length(attr, old, new):
+	sound = get_sound()
+	highlighted_sound = get_highlighted_sound(sound)
+	update_spectrogram(None if sound_selection.is_recording else highlighted_sound)
+
+
+def play_sound():
+	if not sound_selection.is_recording:
+		sound = get_sound()
+		highlighted_sound = get_highlighted_sound(sound)
+		player.play(highlighted_sound)
 
 
 wave_plot.source.selected.on_change('indices', update_spectrum_of_wave_selection)
@@ -151,7 +175,14 @@ wave_plot.source.selected.on_change('indices', update_spectrum_of_wave_selection
 sound_selection.on_change(start_stop_recorder)
 sound_selection.on_change(partial(update, True))
 
+window_length_slider.on_change('value', update_spectrogram_window_length)
+play_button.on_click(play_sound)
+
 
 doc = bokeh.plotting.curdoc()
 doc.add_periodic_callback(update, 100)
 doc.add_root(layout)
+
+def on_session_destroyed(session_context):
+	recorder.close()
+	player.close()

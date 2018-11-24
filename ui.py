@@ -113,6 +113,28 @@ class SpectrogramPlot:
 		]
 
 
+class PlayIndicator:
+
+	def __init__(self, figures):
+		self.spans = []
+
+		for fig in figures:
+			span = bokeh.models.Span(location=None, dimension='height', line_color='firebrick', line_width=3)
+			fig.add_layout(span)
+			self.spans.append(span)
+
+
+	@property
+	def x(self):
+		return self.spans[0].location
+
+	@x.setter
+	def x(self, value):
+		for span in self.spans:
+			span.location = value
+	
+
+
 def link_ranges(source, target):
 	@utils.no_recursion
 	def set_target(attr, old, new):
@@ -120,3 +142,7 @@ def link_ranges(source, target):
 
 	source.on_change('start', set_target)
 	source.on_change('end', set_target)
+
+
+def hr():
+	return bokeh.models.widgets.Div(text='<hr />')

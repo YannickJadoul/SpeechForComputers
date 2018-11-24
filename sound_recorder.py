@@ -1,6 +1,5 @@
 import numpy as np
 import parselmouth
-
 import pyaudio
 import queue
 
@@ -16,28 +15,29 @@ class SoundRecorder:
 		self._queue = queue.Queue()
 		self._sampling_frequency = sampling_frequency
 
-		self.pyaudio = pyaudio.PyAudio()
-		self.stream = self.pyaudio.open(format=pyaudio.paFloat32, channels=1, rate=sampling_frequency, input=True, start=False, frames_per_buffer=block_size, stream_callback=self._record_callback)
+		self._pyaudio = pyaudio.PyAudio()
+		self._stream = self._pyaudio.open(format=pyaudio.paFloat32, channels=1, rate=sampling_frequency, input=True, start=False, frames_per_buffer=block_size, stream_callback=self._record_callback)
 
 		self._sound = None
 
 	def start(self):
-		self.stream.start_stream()
+		self._stream.start_stream()
 
 	def stop(self, clear=False):
-		self.stream.stop_stream()
+		self._stream.stop_stream()
 		if clear:
 			self.clear()
 
 	@property
 	def active(self):
-		return self.stream.is_active()
+		return self._stream.is_active()
 
 	def clear(self):
 		self._sound = None
 
 	def close(self):
-		self.pyaudio.close()
+		if self._pyaudio:
+			self._pyaudio.terminate()
 
 	@property
 	def sound(self):
