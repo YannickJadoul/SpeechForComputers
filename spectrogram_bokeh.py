@@ -9,8 +9,10 @@ import parselmouth
 import bokeh.layouts
 import bokeh.plotting
 
+import matplotlib.pyplot as plt
 import scipy.ndimage
 
+import subprocess
 import time
 
 from functools import partial
@@ -42,8 +44,9 @@ ui.link_ranges(wave_plot.fig.x_range, spectrogram_plot.fig.x_range)
 
 window_length_slider = bokeh.models.widgets.Slider(**SPECTROGRAM_WINDOW_LENGTH, format="0.000", title="Spectrogram window")
 play_button = bokeh.models.widgets.Button(label="\u25b6 Play")
+print_button = bokeh.models.widgets.Button(label="Print")
 
-widgets = bokeh.layouts.widgetbox(*sound_selection.buttons, ui.hr(), window_length_slider, ui.hr(), play_button, width=400, sizing_mode='fixed')
+widgets = bokeh.layouts.widgetbox(*sound_selection.buttons, ui.hr(), window_length_slider, ui.hr(), play_button, print_button, width=400, sizing_mode='fixed')
 layout = bokeh.layouts.row(widgets, bokeh.layouts.column(wave_plot.fig, spectrum_plot.fig, spectrogram_plot.fig, sizing_mode='scale_height'), sizing_mode='scale_height')
 
 
@@ -146,7 +149,7 @@ def update(manual=False):
 		update_spectrum(highlighted_sound)
 		update_spectrogram(None if sound_selection.is_recording else highlighted_sound)
 
-	print_samples(sound)
+	#print_samples(sound)
 
 	#print(time.time() - t)
 
@@ -170,6 +173,35 @@ def play_sound():
 		player.play(highlighted_sound)
 
 
+
+def do_print():
+	sound = get_sound()
+	highlighted_sound = get_highlighted_sound(sound)
+	t = highlighted_sound.xs()
+	y = highlighted_sound.values[0,:]
+	
+	plt.clf()
+	plt.figure(figsize = (6, 3.543), clear=True) # width, height in inches (14.8 x 9 cm)
+	
+	plt.subplot(211)
+	plt.plot(t, y, 'k', linewidth = 1)
+	plt.ylabel("amplitude")
+	plt.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+	
+	plt.tight_layout()
+	
+	plt.subplot(212)
+	plt.specgram(y, Fs = SAMPLING_FREQUENCY, cmap=plt.get_cmap("plasma"))
+	plt.xlabel("tijd (sec)")
+	plt.ylabel("frequentie (Hz)")
+	plt.ylim(0, 4000)
+	plt.tight_layout()
+	
+	plt.savefig("wave.png", dpi=600, format="png", transparent=True)
+	
+	process = subprocess.Popen("./print_wave.sh", shell=True)
+
+
 wave_plot.source.selected.on_change('indices', update_spectrum_of_wave_selection)
 
 sound_selection.on_change(start_stop_recorder)
@@ -177,7 +209,7 @@ sound_selection.on_change(partial(update, True))
 
 window_length_slider.on_change('value', update_spectrogram_window_length)
 play_button.on_click(play_sound)
-
+print_button.on_click(do_print)
 
 doc = bokeh.plotting.curdoc()
 doc.add_periodic_callback(update, 100)
